@@ -79,6 +79,36 @@ export function ProductDetailModal({ product, onClose, onAddToCart }: Props) {
           </p>
           <p className="text-sm text-muted-foreground mt-3 leading-relaxed">{product.description}</p>
 
+          {/* Product Details */}
+          {(product.weight || product.productType || product.format || product.material) && (
+            <div className="mt-5 grid grid-cols-2 gap-3 p-3.5 bg-muted rounded-lg">
+              {product.weight && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Peso</p>
+                  <p className="text-sm font-semibold text-foreground">{product.weight}</p>
+                </div>
+              )}
+              {product.productType && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Tipo</p>
+                  <p className="text-sm font-semibold text-foreground">{product.productType}</p>
+                </div>
+              )}
+              {product.format && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Formato</p>
+                  <p className="text-sm font-semibold text-foreground">{product.format}</p>
+                </div>
+              )}
+              {product.material && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Material</p>
+                  <p className="text-sm font-semibold text-foreground">{product.material}</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {product.sizes.length > 0 && (
             <div className="mt-5">
               <p className="text-sm font-medium text-foreground mb-2">

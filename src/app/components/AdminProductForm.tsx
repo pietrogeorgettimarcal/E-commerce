@@ -30,6 +30,10 @@ export function AdminProductForm({ product, accessToken, apiBase, onClose, onSav
     photos: product?.photos || [] as string[],
     stock: product?.stock?.toString() || '0',
     visible: product?.visible ?? true,
+    weight: product?.weight || '',
+    productType: product?.productType || '',
+    format: product?.format || '',
+    material: product?.material || '',
   });
   const [newSize, setNewSize] = useState('');
 
@@ -90,6 +94,10 @@ export function AdminProductForm({ product, accessToken, apiBase, onClose, onSav
         photos: form.photos,
         stock: Number(form.stock) || 0,
         visible: form.visible,
+        weight: form.weight.trim(),
+        productType: form.productType.trim(),
+        format: form.format.trim(),
+        material: form.material.trim(),
       };
       const url = isNew ? `${apiBase}/products` : `${apiBase}/products/${product!.id}`;
       const method = isNew ? 'POST' : 'PUT';
@@ -253,6 +261,50 @@ export function AdminProductForm({ product, accessToken, apiBase, onClose, onSav
                 >
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
+              </div>
+            </div>
+
+            {/* Weight, Type, Format, Material */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Peso (g)</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={form.weight}
+                  onChange={e => setForm(f => ({ ...f, weight: e.target.value }))}
+                  placeholder="Ex: 50g, 100g"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Tipo de Produto</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={form.productType}
+                  onChange={e => setForm(f => ({ ...f, productType: e.target.value }))}
+                  placeholder="Ex: Colar, Brinco"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Formato</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={form.format}
+                  onChange={e => setForm(f => ({ ...f, format: e.target.value }))}
+                  placeholder="Ex: Redondo, Quadrado"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Material Utilizado</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={form.material}
+                  onChange={e => setForm(f => ({ ...f, material: e.target.value }))}
+                  placeholder="Ex: Ouro, Prata, Aço"
+                />
               </div>
             </div>
 

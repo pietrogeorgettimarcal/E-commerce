@@ -242,14 +242,14 @@ app.post('/make-server-b41c106b/admin/add', async (c) => {
   if (!user) return c.json({ error: 'Not authenticated' }, 401);
   const { secretCode } = await c.req.json();
   const adminList = (await kv.get('admin:list') as any[] | null) || [];
-  if (adminList.length === 0 || secretCode === 'bijuteria2024') {
-    if (!adminList.some((a: any) => a.userId === user.id)) {
-      adminList.push({ userId: user.id, email: user.email });
-      await kv.set('admin:list', adminList);
-    }
-    return c.json({ success: true });
+  if (secretCode !== 'bijuteria2024') {
+    return c.json({ error: 'Código inválido' }, 403);
   }
-  return c.json({ error: 'Código inválido' }, 403);
+  if (!adminList.some((a: any) => a.userId === user.id)) {
+    adminList.push({ userId: user.id, email: user.email });
+    await kv.set('admin:list', adminList);
+  }
+  return c.json({ success: true });
 });
 
 app.get('/make-server-b41c106b/admin/list', async (c) => {

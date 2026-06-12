@@ -57,7 +57,7 @@ export function AdminSetup({ apiBase, accessToken, onSuccess }: AdminSetupProps)
           </div>
           {error && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</p>}
           <p className="text-xs text-muted-foreground text-center">
-            Se for o primeiro admin, deixe em branco e confirme.
+            Digite o código de administrador para acessar o painel.
           </p>
           <button
             type="submit"

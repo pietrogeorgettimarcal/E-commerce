@@ -1,18 +1,15 @@
-import { ShoppingBag, Gem, User, LogOut, Settings, ChevronDown } from "lucide-react";
+import { ShoppingBag, Gem, User, LogOut, ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 interface HeaderProps {
   user: any;
-  isAdmin: boolean;
   cartCount: number;
-  view: 'store' | 'admin';
   onOpenAuth: () => void;
   onOpenCart: () => void;
   onSignOut: () => void;
-  onViewChange: (v: 'store' | 'admin') => void;
 }
 
-export function Header({ user, isAdmin, cartCount, view, onOpenAuth, onOpenCart, onSignOut, onViewChange }: HeaderProps) {
+export function Header({ user, cartCount, onOpenAuth, onOpenCart, onSignOut }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -33,7 +30,7 @@ export function Header({ user, isAdmin, cartCount, view, onOpenAuth, onOpenCart,
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
         {/* Logo */}
         <button
-          onClick={() => onViewChange('store')}
+          onClick={() => window.location.href = '/'}
           className="flex items-center gap-2 hover:opacity-75 transition-opacity"
         >
           <Gem className="w-5 h-5 text-accent" />
@@ -77,15 +74,6 @@ export function Header({ user, isAdmin, cartCount, view, onOpenAuth, onOpenCart,
                     <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
                     <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                   </div>
-                  {isAdmin && (
-                    <button
-                      onClick={() => { onViewChange(view === 'admin' ? 'store' : 'admin'); setMenuOpen(false); }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground hover:bg-secondary transition-colors"
-                    >
-                      <Settings className="w-4 h-4 text-accent" />
-                      {view === 'admin' ? 'Ver Loja' : 'Painel Admin'}
-                    </button>
-                  )}
                   <button
                     onClick={() => { onSignOut(); setMenuOpen(false); }}
                     className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-destructive hover:bg-destructive/5 transition-colors"

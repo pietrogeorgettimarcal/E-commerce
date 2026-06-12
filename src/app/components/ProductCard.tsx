@@ -12,6 +12,10 @@ export interface Product {
   stock: number;
   visible: boolean;
   createdAt: string;
+  weight?: string;
+  productType?: string;
+  format?: string;
+  material?: string;
 }
 
 interface ProductCardProps {

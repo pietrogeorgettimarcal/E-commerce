@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { projectId, publicAnonKey } from "/utils/supabase/info";
+import { projectId, publicAnonKey } from "../../utils/supabase/info";
 import { Toaster, toast } from "sonner";
 import { Header } from "./components/Header";
 import { StorePage } from "./components/StorePage";
@@ -8,7 +8,7 @@ import { CartDrawer, CartItem } from "./components/CartDrawer";
 import { AuthModal } from "./components/AuthModal";
 import { CheckoutModal } from "./components/CheckoutModal";
 import { AdminPanel } from "./components/AdminPanel";
-import { AdminSetup } from "./components/AdminSetup";
+import { AdminLogin } from "./components/AdminLogin";
 import { Product } from "./components/ProductCard";
 
 const supabase = createClient(`https://${projectId}.supabase.co`, publicAnonKey);
@@ -22,14 +22,15 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [session, setSession] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [view, setView] = useState<"store" | "admin">("store");
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
-  const [showAdminSetup, setShowAdminSetup] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
+
+  // Check if trying to access admin route
+  const isAdminRoute = window.location.pathname === '/admin' || window.location.hash === '#/admin' || window.location.hash === '#admin';
 
   // Load session on mount
   useEffect(() => {
@@ -49,7 +50,6 @@ export default function App() {
   useEffect(() => {
     if (!user || !session?.access_token) {
       setIsAdmin(false);
-      setView("store");
       return;
     }
     fetch(`${API_BASE}/admin/check`, { headers: authHeaders(session.access_token) })
@@ -74,13 +74,6 @@ export default function App() {
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
   // Auth functions
-  async function signInWithGoogle() {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin },
-    });
-  }
-
   async function signInWithEmail(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
@@ -88,21 +81,31 @@ export default function App() {
   }
 
   async function signUp(email: string, password: string, name: string) {
-    const res = await fetch(`${API_BASE}/auth/signup`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, name }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Erro ao criar conta");
-    await signInWithEmail(email, password);
-    toast.success("Conta criada com sucesso! ✨");
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name },
+          emailRedirectTo: window.location.origin,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.user) {
+        await signInWithEmail(email, password);
+        toast.success("Conta criada com sucesso! ✨");
+      } else {
+        toast.info("Verifique seu email para confirmar a conta");
+      }
+    } catch (e: any) {
+      throw new Error(e.message || "Erro ao criar conta");
+    }
   }
 
   async function signOut() {
     await supabase.auth.signOut();
     setIsAdmin(false);
-    setView("store");
+    if (isAdminRoute) window.location.href = '/';
     toast.success("Até logo!");
   }
 
@@ -158,50 +161,98 @@ export default function App() {
 
   const cartCount = cart.reduce((sum, i) => sum + i.qty, 0);
 
+  // Admin Panel View
+  if (isAdminRoute) {
+    if (!session?.access_token) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <Toaster position="top-right" richColors />
+          <div className="bg-card rounded-3xl shadow-2xl max-w-md w-full p-8 text-center">
+            <h1 className="text-2xl font-semibold mb-3">Área Admin</h1>
+            <p className="text-sm text-muted-foreground mb-6">
+              Esta área é exclusiva para administradores. Faça login para continuar.
+            </p>
+            <button
+              onClick={() => setShowAuth(true)}
+              className="inline-flex items-center justify-center px-5 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              Entrar
+            </button>
+            <button
+              onClick={() => window.location.href = '/'}
+              className="mt-3 inline-flex items-center justify-center px-5 py-3 bg-secondary text-secondary-foreground rounded-xl text-sm font-medium hover:bg-secondary/90 transition-colors"
+            >
+              Voltar para a loja
+            </button>
+          </div>
+          {showAuth && (
+            <AuthModal
+              onClose={() => setShowAuth(false)}
+              onSignInWithEmail={signInWithEmail}
+              onSignUp={signUp}
+            />
+          )}
+        </div>
+      );
+    }
+
+    if (isAdmin) {
+      return (
+        <div className="min-h-screen bg-background">
+          <Toaster position="top-right" richColors />
+          <AdminPanel accessToken={session.access_token} apiBase={API_BASE} />
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Toaster position="top-right" richColors />
+        <AdminLogin
+          apiBase={API_BASE}
+          accessToken={session.access_token}
+          onSuccess={() => {
+            setIsAdmin(true);
+            toast.success("Acesso admin concedido! 🛡️");
+            window.location.reload();
+          }}
+          onCancel={() => {
+            window.location.href = '/';
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Public Store View
   return (
     <div className="min-h-screen bg-background">
       <Toaster position="top-right" richColors />
 
       <Header
         user={user}
-        isAdmin={isAdmin}
         cartCount={cartCount}
-        view={view}
         onOpenAuth={() => setShowAuth(true)}
         onOpenCart={() => setShowCart(true)}
         onSignOut={signOut}
-        onViewChange={(v) => {
-          if (v === "admin" && !isAdmin) {
-            setShowAdminSetup(true);
-          } else {
-            setView(v);
-          }
-        }}
       />
 
       {/* Main content */}
       <main className="pt-16">
-        {view === "store" ? (
-          loadingProducts ? (
-            <div className="flex items-center justify-center h-96">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-muted-foreground">Carregando coleção...</p>
-              </div>
+        {loadingProducts ? (
+          <div className="flex items-center justify-center h-96">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-muted-foreground">Carregando coleção...</p>
             </div>
-          ) : (
-            <StorePage products={products} onAddToCart={addToCart} />
-          )
+          </div>
         ) : (
-          session?.access_token && (
-            <AdminPanel accessToken={session.access_token} apiBase={API_BASE} />
-          )
+          <StorePage products={products} onAddToCart={addToCart} />
         )}
       </main>
 
       {/* Footer */}
-      {view === "store" && (
-        <footer className="bg-foreground text-background mt-16">
+      <footer className="bg-foreground text-background mt-16">
           <div className="max-w-7xl mx-auto px-6 py-10">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-8">
               <div>
@@ -229,18 +280,9 @@ export default function App() {
             </div>
             <div className="border-t border-background/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
               <p className="text-background/40 text-xs">© 2025 Lumière Bijuterias. Todos os direitos reservados.</p>
-              {user && !isAdmin && (
-                <button
-                  onClick={() => setShowAdminSetup(true)}
-                  className="text-background/30 text-xs hover:text-background/50 transition-colors"
-                >
-                  Área restrita
-                </button>
-              )}
             </div>
           </div>
         </footer>
-      )}
 
       {/* Modals */}
       {showCart && (
@@ -258,7 +300,6 @@ export default function App() {
       {showAuth && (
         <AuthModal
           onClose={() => setShowAuth(false)}
-          onSignInWithGoogle={signInWithGoogle}
           onSignInWithEmail={signInWithEmail}
           onSignUp={signUp}
         />
@@ -272,18 +313,6 @@ export default function App() {
         />
       )}
 
-      {showAdminSetup && user && session?.access_token && (
-        <AdminSetup
-          apiBase={API_BASE}
-          accessToken={session.access_token}
-          onSuccess={() => {
-            setIsAdmin(true);
-            setView("admin");
-            setShowAdminSetup(false);
-            toast.success("Acesso admin concedido! 🛡️");
-          }}
-        />
-      )}
     </div>
   );
 }
