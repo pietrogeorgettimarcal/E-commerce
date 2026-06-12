@@ -94,7 +94,7 @@ export function AdminProductForm({ product, accessToken, apiBase, onClose, onSav
         photos: form.photos,
         stock: Number(form.stock) || 0,
         visible: form.visible,
-        weight: form.weight.trim(),
+        weight: String(form.weight).trim(),
         productType: form.productType.trim(),
         format: form.format.trim(),
         material: form.material.trim(),

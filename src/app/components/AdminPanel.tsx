@@ -174,7 +174,7 @@ export function AdminPanel({ accessToken, apiBase }: AdminPanelProps) {
             ) : (
               <div className="space-y-3">
                 {products.map(product => {
-                  const photo = product.photos[0];
+                  const photo = product.photos?.[0];
                   return (
                     <div key={product.id} className="bg-card rounded-2xl border border-border p-4 flex items-center gap-4">
                       <div className="w-16 h-16 rounded-xl overflow-hidden bg-muted flex-shrink-0">

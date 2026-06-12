@@ -214,7 +214,6 @@ export default function App() {
           onSuccess={() => {
             setIsAdmin(true);
             toast.success("Acesso admin concedido! 🛡️");
-            window.location.reload();
           }}
           onCancel={() => {
             window.location.href = '/';
