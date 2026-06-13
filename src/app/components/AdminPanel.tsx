@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
-import { Package, ShoppingCart, Plus, Edit2, Trash2, Eye, EyeOff, Loader2, RefreshCw, Tag } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Package, ShoppingCart, Plus, Edit2, Trash2, Eye, EyeOff, Loader2, RefreshCw, Tag, MessageCircle, Check, X, Copy, Download, Upload, Share2 } from "lucide-react";
 import { Product } from "./ProductCard";
 import { AdminProductForm } from "./AdminProductForm";
+import { getStockQuantity } from "./ui/utils";
+import * as XLSX from "xlsx";
 
 interface AdminPanelProps {
   accessToken: string;
@@ -18,21 +20,27 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function AdminPanel({ accessToken, apiBase }: AdminPanelProps) {
-  const [tab, setTab] = useState<'products' | 'orders'>('products');
+  const [tab, setTab] = useState<'products' | 'orders' | 'comments'>('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [comments, setComments] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [commentReply, setCommentReply] = useState<Record<string, string>>({});
+  const [exportMessage, setExportMessage] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const headers = { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
 
   async function fetchProducts() {
     setLoadingProducts(true);
     try {
-      const res = await fetch(`${apiBase}/products/all`, { headers });
+      const res = await fetch(`${apiBase}/products`, { headers });
       const data = await res.json();
       setProducts(Array.isArray(data) ? data : []);
     } catch (e) { console.log('Error fetching products:', e); }
@@ -50,7 +58,15 @@ export function AdminPanel({ accessToken, apiBase }: AdminPanelProps) {
   }
 
   useEffect(() => { fetchProducts(); }, []);
-  useEffect(() => { if (tab === 'orders') fetchOrders(); }, [tab]);
+  useEffect(() => {
+    if (tab === 'orders') fetchOrders();
+    if (tab === 'comments') fetchComments();
+  }, [tab]);
+  useEffect(() => {
+    if (!successMessage) return;
+    const timeout = setTimeout(() => setSuccessMessage(''), 4000);
+    return () => clearTimeout(timeout);
+  }, [successMessage]);
 
   async function toggleVisibility(product: Product) {
     try {
@@ -69,8 +85,146 @@ export function AdminPanel({ accessToken, apiBase }: AdminPanelProps) {
     try {
       await fetch(`${apiBase}/products/${id}`, { method: 'DELETE', headers });
       setProducts(ps => ps.filter(p => p.id !== id));
+      setSuccessMessage('Produto excluído com sucesso.');
     } catch (e) { console.log('Error deleting product:', e); }
     finally { setDeletingId(null); }
+  }
+
+  async function fetchComments() {
+    setLoadingComments(true);
+    try {
+      const res = await fetch(`${apiBase}/comments/all`, { headers });
+      const data = await res.json();
+      setComments(Array.isArray(data) ? data : []);
+      setCommentReply((prev) => {
+        const next: Record<string, string> = {};
+        if (Array.isArray(data)) {
+          data.forEach((comment: any) => { next[comment.id] = comment.reply || ''; });
+        }
+        return next;
+      });
+    } catch (e) { console.log('Error fetching comments:', e); }
+    finally { setLoadingComments(false); }
+  }
+
+  async function updateComment(commentId: string, updates: Record<string, any>) {
+    try {
+      const res = await fetch(`${apiBase}/comments/${commentId}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao atualizar comentário');
+      }
+      setComments(cs => cs.map(c => c.id === commentId ? { ...c, ...updates } : c));
+      setSuccessMessage('Comentário atualizado com sucesso.');
+    } catch (e) { console.log('Error updating comment:', e); }
+  }
+
+  function getCatalogText() {
+    if (!products.length) return 'Catálogo Georgetti Atelier vazio.';
+    const rows = products.map(product => {
+      const sizes = product.sizes && product.sizes.length ? product.sizes.join(', ') : 'Único';
+      const stock = typeof product.stock === 'object' ? Object.values(product.stock).join(', ') : String(product.stock || 0);
+      return `• ${product.name} — R$ ${product.price.toFixed(2).replace('.', ',')} \n  Tamanhos: ${sizes} \n  Estoque: ${stock}`;
+    });
+    return `Catálogo Georgetti Atelier:\n\n${rows.join('\n\n')}\n\nVeja mais no site.`;
+  }
+
+  function copyCatalogText() {
+    const text = getCatalogText();
+    navigator.clipboard.writeText(text).then(() => {
+      setSuccessMessage('Texto do catálogo copiado para a área de transferência.');
+    });
+  }
+
+  function shareWhatsApp() {
+    const text = encodeURIComponent(getCatalogText());
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+  }
+
+  function exportProductsXLSX() {
+    if (!products.length) return;
+    const data = products.map(product => ({
+      id: product.id,
+      nome: product.name,
+      descricao: product.description,
+      preco: product.price,
+      categoria: product.category,
+      tamanhos: product.sizes.join(', '),
+      estoque: typeof product.stock === 'object' ? JSON.stringify(product.stock) : String(product.stock),
+      visivel: product.visible ? 'sim' : 'nao',
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Produtos');
+    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'georgetti-produtos.xlsx';
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }
+
+  async function importProductsXLSX(file: File) {
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+    const updates = rows.map(row => ({
+      id: row.id,
+      name: row.nome || row.name || '',
+      description: row.descricao || row.description || '',
+      price: Number(row.preco || row.price || 0),
+      category: row.categoria || row.category || 'Geral',
+      sizes: typeof row.tamanhos === 'string' ? row.tamanhos.split(',').map((item: string) => item.trim()).filter(Boolean) : [],
+      stock: row.estoque ? (() => {
+        try { return JSON.parse(row.estoque); } catch { return Number(row.estoque) || 0; }
+      })() : 0,
+      visible: String(row.visivel || row.visible || 'sim').toLowerCase().startsWith('s'),
+    }));
+
+    const updatedProductIds: string[] = [];
+    for (const line of updates) {
+      if (!line.name) continue;
+      if (line.id) {
+        const res = await fetch(`${apiBase}/products/${line.id}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify(line),
+        });
+        const data = await res.json();
+        if (res.ok) updatedProductIds.push(line.id);
+      } else {
+        const res = await fetch(`${apiBase}/products`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(line),
+        });
+        const data = await res.json();
+        if (res.ok && data?.id) updatedProductIds.push(data.id);
+      }
+    }
+
+    await fetchProducts();
+    setSuccessMessage(`Importação concluída. ${updatedProductIds.length} produtos atualizados.`);
+  }
+
+  function handleXlsxUpload() {
+    fileInputRef.current?.click();
+  }
+
+  function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    importProductsXLSX(file).catch(err => console.log('Erro importando XLSX', err));
+    event.target.value = '';
   }
 
   async function updateOrderStatus(orderId: string, status: string) {
@@ -84,11 +238,13 @@ export function AdminPanel({ accessToken, apiBase }: AdminPanelProps) {
     } catch (e) { console.log('Error updating order:', e); }
   }
 
-  function handleFormSaved(product: Product, isNew: boolean) {
+  async function handleFormSaved(product: Product, isNew: boolean) {
     if (isNew) setProducts(ps => [product, ...ps]);
     else setProducts(ps => ps.map(p => p.id === product.id ? product : p));
     setShowForm(false);
     setEditingProduct(null);
+    setSuccessMessage(isNew ? 'Produto criado com sucesso.' : 'Produto atualizado com sucesso.');
+    await fetchProducts();
   }
 
   const totalRevenue = orders
@@ -124,7 +280,7 @@ export function AdminPanel({ accessToken, apiBase }: AdminPanelProps) {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-muted p-1 rounded-xl w-fit mb-6">
-          {(['products', 'orders'] as const).map(t => (
+          {(['products', 'orders', 'comments'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -132,7 +288,7 @@ export function AdminPanel({ accessToken, apiBase }: AdminPanelProps) {
                 tab === t ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
               }`}
             >
-              {t === 'products' ? 'Produtos' : 'Pedidos'}
+              {t === 'products' ? 'Produtos' : t === 'orders' ? 'Pedidos' : 'Comentários'}
             </button>
           ))}
         </div>
@@ -140,9 +296,17 @@ export function AdminPanel({ accessToken, apiBase }: AdminPanelProps) {
         {/* Products Tab */}
         {tab === 'products' && (
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-['Playfair_Display'] text-xl font-semibold">Catálogo</h2>
-              <div className="flex gap-2">
+            {successMessage && (
+              <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                {successMessage}
+              </div>
+            )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+              <div>
+                <h2 className="font-['Playfair_Display'] text-xl font-semibold">Catálogo</h2>
+                <p className="text-sm text-muted-foreground">Exportar e sincronizar o catálogo rapidamente.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
                 <button onClick={fetchProducts} className="p-2 rounded-xl border border-border hover:bg-muted transition-colors" title="Atualizar">
                   <RefreshCw className="w-4 h-4 text-muted-foreground" />
                 </button>
@@ -153,8 +317,37 @@ export function AdminPanel({ accessToken, apiBase }: AdminPanelProps) {
                   <Plus className="w-4 h-4" />
                   Novo Produto
                 </button>
+                <button
+                  onClick={exportProductsXLSX}
+                  className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-xl text-sm font-medium hover:bg-secondary/90 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Exportar Excel
+                </button>
+                <button
+                  onClick={handleXlsxUpload}
+                  className="flex items-center gap-2 px-4 py-2 bg-card text-muted-foreground rounded-xl text-sm font-medium border border-border hover:bg-muted transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  Importar Excel
+                </button>
+                <button
+                  onClick={shareWhatsApp}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-500 transition-colors"
+                >
+                  <Share2 className="w-4 h-4" />
+                  WhatsApp
+                </button>
+                <button
+                  onClick={copyCatalogText}
+                  className="flex items-center gap-2 px-4 py-2 bg-muted text-muted-foreground rounded-xl text-sm font-medium border border-border hover:bg-card transition-colors"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copiar para Instagram
+                </button>
               </div>
             </div>
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} />
 
             {loadingProducts ? (
               <div className="flex items-center justify-center py-20">
@@ -198,7 +391,7 @@ export function AdminPanel({ accessToken, apiBase }: AdminPanelProps) {
                           <span className="font-['Playfair_Display'] font-semibold text-primary">
                             R$ {product.price.toFixed(2).replace('.', ',')}
                           </span>
-                          <span className="text-xs text-muted-foreground">{product.stock} em estoque</span>
+                          <span className="text-xs text-muted-foreground">{getStockQuantity(product.stock)} em estoque</span>
                           {product.sizes.length > 0 && (
                             <span className="text-xs text-muted-foreground">{product.sizes.join(', ')}</span>
                           )}
@@ -231,6 +424,95 @@ export function AdminPanel({ accessToken, apiBase }: AdminPanelProps) {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Comments Tab */}
+        {tab === 'comments' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-['Playfair_Display'] text-xl font-semibold">Comentários</h2>
+              <button onClick={fetchComments} className="p-2 rounded-xl border border-border hover:bg-muted transition-colors">
+                <RefreshCw className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+
+            {loadingComments ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : comments.length === 0 ? (
+              <div className="text-center py-20 bg-card rounded-2xl border border-border">
+                <MessageCircle className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="font-['Playfair_Display'] text-lg text-muted-foreground">Nenhum comentário para moderar</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {comments.map(comment => (
+                  <div key={comment.id} className="bg-card rounded-2xl border border-border p-5">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                      <div>
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <span className="font-medium text-foreground">{comment.name}</span>
+                          <span className="text-xs text-muted-foreground">{comment.email}</span>
+                          {comment.product_id && (
+                            <span className="text-xs px-2 py-1 bg-muted rounded-full text-muted-foreground">Produto {comment.product_id}</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-2 whitespace-pre-line">{comment.message}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <select
+                          value={comment.status}
+                          onChange={e => updateComment(comment.id, { status: e.target.value })}
+                          className="text-xs border border-border rounded-lg px-2 py-1 bg-card focus:outline-none focus:ring-1 focus:ring-ring"
+                        >
+                          {['pending', 'approved', 'rejected'].map(status => (
+                            <option key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => updateComment(comment.id, { status: 'approved' })}
+                          className="px-3 py-2 bg-green-600 text-white rounded-xl text-xs font-medium hover:bg-green-500 transition-colors"
+                        >
+                          <Check className="w-4 h-4" />
+                          Aprovar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3">
+                      <textarea
+                        value={commentReply[comment.id] ?? ''}
+                        onChange={e => setCommentReply(prev => ({ ...prev, [comment.id]: e.target.value }))}
+                        placeholder="Responder comentário..."
+                        className="w-full min-h-[120px] px-3.5 py-2.5 bg-input-background rounded-2xl text-sm border border-border focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          onClick={() => updateComment(comment.id, { reply: commentReply[comment.id] || '' })}
+                          className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
+                        >
+                          Salvar resposta
+                        </button>
+                        <button
+                          onClick={() => setCommentReply(prev => ({ ...prev, [comment.id]: comment.reply || '' }))}
+                          className="px-4 py-2 bg-muted text-muted-foreground rounded-xl text-sm font-medium border border-border hover:bg-card transition-colors"
+                        >
+                          Restaurar resposta
+                        </button>
+                      </div>
+                      {comment.reply && (
+                        <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 text-sm text-emerald-700">
+                          <p className="font-medium mb-1">Resposta publicada</p>
+                          <p className="whitespace-pre-line">{comment.reply}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

@@ -10,6 +10,7 @@ import { CheckoutModal } from "./components/CheckoutModal";
 import { AdminPanel } from "./components/AdminPanel";
 import { AdminLogin } from "./components/AdminLogin";
 import { Product } from "./components/ProductCard";
+import { getStockQuantity } from "./components/ui/utils";
 
 const supabase = createClient(`https://${projectId}.supabase.co`, publicAnonKey);
 const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-b41c106b`;
@@ -29,20 +30,47 @@ export default function App() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
+  // 1. Quando o site abre ou o utilizador muda, carrega o carrinho correto
+  useEffect(() => {
+    const cartKey = user ? `carrinho_${user.id}` : 'carrinho_visitante';
+    const carrinhoGuardado = localStorage.getItem(cartKey);
+    
+    if (carrinhoGuardado) {
+      setCart(JSON.parse(carrinhoGuardado));
+    } else {
+      setCart([]); // Se não tem carrinho guardado para esta conta, esvazia
+    }
+  }, [user]); // Dispara sempre que o 'user' loga ou desloga
+
+  // 2. Sempre que o carrinho for alterado, guarda no cofre do utilizador
+  useEffect(() => {
+    // Só guarda se houver algo para guardar ou se o carrinho acabou de ser limpo
+    const cartKey = user ? `carrinho_${user.id}` : 'carrinho_visitante';
+    localStorage.setItem(cartKey, JSON.stringify(cart));
+  }, [cart, user]);
+
   // Check if trying to access admin route
   const isAdminRoute = window.location.pathname === '/admin' || window.location.hash === '#/admin' || window.location.hash === '#admin';
 
   // Load session on mount
   useEffect(() => {
+    // Busca a sessão atual (caso a página seja recarregada)
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Fica escutando mudanças de autenticação (Ex: Volta do redirecionamento do Google)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+      
+      // Se o usuário acabou de logar (via Google ou Email), fecha o modal de login automaticamente
+      if (event === 'SIGNED_IN') {
+        setShowAuth(false);
+      }
     });
+    
     return () => subscription.unsubscribe();
   }, []);
 
@@ -51,6 +79,10 @@ export default function App() {
     if (!user || !session?.access_token) {
       setIsAdmin(false);
       return;
+    }
+    const storedAdmin = window.localStorage.getItem('georgettiAdmin') === 'true';
+    if (storedAdmin) {
+      setIsAdmin(true);
     }
     fetch(`${API_BASE}/admin/check`, { headers: authHeaders(session.access_token) })
       .then(r => r.json())
@@ -72,6 +104,10 @@ export default function App() {
   }, []);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
+
+  function getProductStock(product: Product, size: string) {
+    return getStockQuantity(product.stock, size);
+  }
 
   // Auth functions
   async function signInWithEmail(email: string, password: string) {
@@ -102,8 +138,26 @@ export default function App() {
     }
   }
 
+  async function signInWithGoogle() {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+        // 🔥 Isto força o Google a parar e perguntar qual conta usar!
+        queryParams: {
+          prompt: 'select_account'
+        }
+      },
+    });
+    if (error) {
+      console.error("Erro no login com Google:", error.message);
+      toast.error("Falha ao entrar com Google. Tente novamente.");
+    }
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
+    window.localStorage.removeItem('georgettiAdmin');
     setIsAdmin(false);
     if (isAdminRoute) window.location.href = '/';
     toast.success("Até logo!");
@@ -111,6 +165,11 @@ export default function App() {
 
   // Cart functions
   function addToCart(product: Product, size: string) {
+    const available = getProductStock(product, size);
+    if (available <= 0) {
+      toast.error("Este tamanho está esgotado!");
+      return;
+    }
     setCart(prev => {
       const key = `${product.id}-${size}`;
       const existing = prev.find(i => `${i.product.id}-${i.size}` === key);
@@ -190,6 +249,7 @@ export default function App() {
               onClose={() => setShowAuth(false)}
               onSignInWithEmail={signInWithEmail}
               onSignUp={signUp}
+              onSignInWithGoogle={signInWithGoogle}
             />
           )}
         </div>
@@ -212,6 +272,7 @@ export default function App() {
           apiBase={API_BASE}
           accessToken={session.access_token}
           onSuccess={() => {
+            window.localStorage.setItem('georgettiAdmin', 'true');
             setIsAdmin(true);
             toast.success("Acesso admin concedido! 🛡️");
           }}
@@ -246,7 +307,7 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <StorePage products={products} onAddToCart={addToCart} />
+          <StorePage products={products} onAddToCart={addToCart} apiBase={API_BASE} user={user} />
         )}
       </main>
 
@@ -301,6 +362,7 @@ export default function App() {
           onClose={() => setShowAuth(false)}
           onSignInWithEmail={signInWithEmail}
           onSignUp={signUp}
+          onSignInWithGoogle={signInWithGoogle}
         />
       )}
 

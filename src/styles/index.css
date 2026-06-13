@@ -1,3 +1,24 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 👇 Adicione este bloco 👇 */
+@layer base {
+  /* Força a mãozinha em tudo o que é clicável no site */
+  button, 
+  [role="button"],
+  a,
+  summary,
+  select {
+    @apply cursor-pointer;
+  }
+  
+  /* Se o botão estiver desativado (ex: sem estoque), mostra o cursor de bloqueado */
+  button:disabled,
+  button[disabled] {
+    @apply cursor-not-allowed opacity-50;
+  }
+}

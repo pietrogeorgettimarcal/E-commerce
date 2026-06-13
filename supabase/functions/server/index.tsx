@@ -163,7 +163,9 @@ app.post('/make-server-b41c106b/products', async (c) => {
     category: body.category || 'Geral',
     sizes: body.sizes || [],
     photos: body.photos || [],
-    stock: Number(body.stock ?? 0),
+    stock: typeof body.stock === 'object' && body.stock !== null
+      ? body.stock
+      : Number(body.stock ?? 0),
     visible: body.visible ?? true,
     createdAt: new Date().toISOString(),
   };
@@ -180,7 +182,13 @@ app.put('/make-server-b41c106b/products/:id', async (c) => {
   const products = (await kv.get('products:list') as any[] | null) || [];
   const idx = products.findIndex((p: any) => p.id === id);
   if (idx === -1) return c.json({ error: 'Product not found' }, 404);
-  products[idx] = { ...products[idx], ...body };
+  products[idx] = {
+    ...products[idx],
+    ...body,
+    stock: typeof body.stock === 'object' && body.stock !== null
+      ? body.stock
+      : Number(body.stock ?? products[idx].stock ?? 0),
+  };
   await kv.set('products:list', products);
   return c.json(products[idx]);
 });

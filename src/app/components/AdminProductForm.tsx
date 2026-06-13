@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { X, Plus, Trash2, Upload, Link, Loader2, Image } from "lucide-react";
 import { Product } from "./ProductCard";
+import { formatarPreco } from "./ui/utils";
 
 interface AdminProductFormProps {
   product: Product | null;
@@ -28,7 +29,8 @@ export function AdminProductForm({ product, accessToken, apiBase, onClose, onSav
     category: product?.category || 'Colares',
     sizes: product?.sizes || [] as string[],
     photos: product?.photos || [] as string[],
-    stock: product?.stock?.toString() || '0',
+    stock: typeof product?.stock === 'number' ? product.stock.toString() : '0',
+    stockBySize: typeof product?.stock === 'object' && product.stock !== null ? product.stock as Record<string, number> : {} as Record<string, number>,
     visible: product?.visible ?? true,
     weight: product?.weight || '',
     productType: product?.productType || '',
@@ -70,12 +72,24 @@ export function AdminProductForm({ product, accessToken, apiBase, onClose, onSav
   function addSize() {
     const s = newSize.trim();
     if (!s || form.sizes.includes(s)) return;
-    setForm(f => ({ ...f, sizes: [...f.sizes, s] }));
+    setForm(f => ({
+      ...f,
+      sizes: [...f.sizes, s],
+      stockBySize: { ...f.stockBySize, [s]: f.stockBySize[s] ?? 0 },
+    }));
     setNewSize('');
   }
 
   function removeSize(s: string) {
-    setForm(f => ({ ...f, sizes: f.sizes.filter(x => x !== s) }));
+    setForm(f => {
+      const nextStock = { ...f.stockBySize };
+      delete nextStock[s];
+      return {
+        ...f,
+        sizes: f.sizes.filter(x => x !== s),
+        stockBySize: nextStock,
+      };
+    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -85,6 +99,10 @@ export function AdminProductForm({ product, accessToken, apiBase, onClose, onSav
     setLoading(true);
     setError('');
     try {
+      const computedStock = Object.keys(form.stockBySize).length > 0
+        ? Object.values(form.stockBySize).reduce((sum, value) => sum + Number(value || 0), 0)
+        : Number(form.stock) || 0;
+
       const body = {
         name: form.name.trim(),
         description: form.description.trim(),
@@ -92,7 +110,7 @@ export function AdminProductForm({ product, accessToken, apiBase, onClose, onSav
         category: form.category,
         sizes: form.sizes,
         photos: form.photos,
-        stock: Number(form.stock) || 0,
+        stock: computedStock,
         visible: form.visible,
         weight: String(form.weight).trim(),
         productType: form.productType.trim(),
@@ -108,7 +126,8 @@ export function AdminProductForm({ product, accessToken, apiBase, onClose, onSav
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro ao salvar');
-      onSaved(data, isNew);
+      const savedProduct = Array.isArray(data) ? data[0] : data;
+      onSaved(savedProduct, isNew);
     } catch (e: any) {
       setError(e.message || 'Erro ao salvar produto');
     } finally {
@@ -241,16 +260,46 @@ export function AdminProductForm({ product, accessToken, apiBase, onClose, onSav
                   placeholder="0,00"
                   required
                 />
+                {form.price && !isNaN(Number(form.price)) && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {formatarPreco(Number(form.price))}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Estoque</label>
-                <input
-                  type="number"
-                  min="0"
-                  className={inputCls}
-                  value={form.stock}
-                  onChange={e => setForm(f => ({ ...f, stock: e.target.value }))}
-                />
+                {Object.keys(form.stockBySize).length === 0 ? (
+                  <input
+                    type="number"
+                    min="0"
+                    className={inputCls}
+                    value={form.stock}
+                    onChange={e => setForm(f => ({ ...f, stock: e.target.value }))}
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    {form.sizes.map(size => (
+                      <div key={size} className="flex items-center gap-2">
+                        <span className="w-16 text-sm text-muted-foreground">{size}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className={inputCls}
+                          value={form.stockBySize[size] ?? 0}
+                          onChange={e => setForm(f => ({
+                            ...f,
+                            stockBySize: {
+                              ...f.stockBySize,
+                              [size]: Number(e.target.value),
+                            },
+                          }))}
+                        />
+                      </div>
+                    ))}
+                    <p className="text-xs text-muted-foreground">Preencha o estoque por tamanho para variações como P, M e G.</p>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Categoria</label>
@@ -269,11 +318,13 @@ export function AdminProductForm({ product, accessToken, apiBase, onClose, onSav
               <div>
                 <label className="block text-sm font-medium mb-1">Peso (g)</label>
                 <input
-                  type="text"
+                  type="number"
+                  step="0.01"
+                  min="0"
                   className={inputCls}
                   value={form.weight}
                   onChange={e => setForm(f => ({ ...f, weight: e.target.value }))}
-                  placeholder="Ex: 50g, 100g"
+                  placeholder="0,00"
                 />
               </div>
               <div>

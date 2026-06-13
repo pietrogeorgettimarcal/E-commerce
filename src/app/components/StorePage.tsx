@@ -6,11 +6,13 @@ import { ProductDetailModal } from "./ProductDetailModal";
 interface StorePageProps {
   products: Product[];
   onAddToCart: (product: Product, size: string) => void;
+  apiBase: string;
+  user: any | null;
 }
 
 const CATEGORIES = ['Todos', 'Colares', 'Brincos', 'Anéis', 'Pulseiras', 'Tornozeleiras', 'Conjuntos'];
 
-export function StorePage({ products, onAddToCart }: StorePageProps) {
+export function StorePage({ products, onAddToCart, apiBase, user }: StorePageProps) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('Todos');
   const [sortBy, setSortBy] = useState<'newest' | 'price-asc' | 'price-desc'>('newest');
@@ -153,6 +155,8 @@ export function StorePage({ products, onAddToCart }: StorePageProps) {
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
           onAddToCart={onAddToCart}
+          apiBase={apiBase}
+          user={user}
         />
       )}
     </>

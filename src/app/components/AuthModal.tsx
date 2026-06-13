@@ -5,9 +5,10 @@ interface AuthModalProps {
   onClose: () => void;
   onSignInWithEmail: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string, name: string) => Promise<void>;
+  onSignInWithGoogle: () => Promise<void>;
 }
 
-export function AuthModal({ onClose, onSignInWithEmail, onSignUp }: AuthModalProps) {
+export function AuthModal({ onClose, onSignInWithEmail, onSignUp, onSignInWithGoogle }: AuthModalProps) {
   const [tab, setTab] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -51,7 +52,7 @@ export function AuthModal({ onClose, onSignInWithEmail, onSignUp }: AuthModalPro
             {tab === 'login' ? 'Bem-vinda de volta' : 'Criar conta'}
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {tab === 'login' ? 'Entre para continuar comprando' : 'Junte-se à Lumière'}
+            {tab === 'login' ? 'Entre para continuar comprando na Georgetti Atelier' : 'Junte-se à Georgetti Atelier'}
           </p>
         </div>
 
@@ -70,6 +71,28 @@ export function AuthModal({ onClose, onSignInWithEmail, onSignUp }: AuthModalPro
               </button>
             ))}
           </div>
+
+          {tab === 'login' && (
+            <button
+              type="button"
+              onClick={async () => {
+                setError('');
+                setLoading(true);
+                try {
+                  await onSignInWithGoogle();
+                  onClose();
+                } catch (err: any) {
+                  setError(err.message || 'Ocorreu um erro ao entrar com Google.');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              Entrar com Google
+            </button>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-3">
             {tab === 'signup' && (

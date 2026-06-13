@@ -1,5 +1,5 @@
-import { ShoppingBag, Gem, User, LogOut, ChevronDown } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import React from 'react';
+import { ShoppingBag, User, LogOut } from 'lucide-react';
 
 interface HeaderProps {
   user: any;
@@ -10,89 +10,85 @@ interface HeaderProps {
 }
 
 export function Header({ user, cartCount, onOpenAuth, onOpenCart, onSignOut }: HeaderProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário';
+  // Pega o nome do usuário vindo do Google ou o e-mail como alternativa
+  const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email;
+  // Pega a foto de perfil enviada pelo Google
+  const userAvatar = user?.user_metadata?.avatar_url;
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-card/90 backdrop-blur-md border-b border-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-        {/* Logo */}
-        <button
-          onClick={() => window.location.href = '/'}
-          className="flex items-center gap-2 hover:opacity-75 transition-opacity"
-        >
-          <Gem className="w-5 h-5 text-accent" />
-          <span className="font-['Playfair_Display'] font-semibold text-xl text-foreground tracking-wide">
-            Lumière
-          </span>
-        </button>
-
-        {/* Right actions */}
-        <div className="flex items-center gap-2">
-          {/* Cart */}
-          <button
-            onClick={onOpenCart}
-            className="relative p-2 rounded-full hover:bg-secondary transition-colors"
-            aria-label="Carrinho"
+    <header className="fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-md border-b border-gray-100 z-40 px-6">
+      <div className="max-w-7xl mx-auto h-full flex items-center justify-between">
+        
+        {/* Logotipo da Loja */}
+        <div className="flex items-center space-x-2">
+          <span 
+            className="font-['Playfair_Display'] text-2xl font-semibold tracking-wider text-gray-900 cursor-pointer"
+            onClick={() => window.location.href = '/'}
           >
-            <ShoppingBag className="w-5 h-5 text-foreground" />
+            Georgetti Atelier
+          </span>
+        </div>
+
+        {/* Botões de Ação (Carrinho e Perfil) */}
+        <div className="flex items-center space-x-4">
+          
+          {/* Botão do Carrinho */}
+          <button 
+            onClick={onOpenCart}
+            className="p-2 text-gray-600 hover:text-gray-900 relative rounded-full hover:bg-gray-50 transition"
+          >
+            <ShoppingBag className="w-5 h-5" />
             {cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs w-5 h-5 rounded-full flex items-center justify-center font-medium">
-                {cartCount > 9 ? '9+' : cartCount}
+              <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                {cartCount}
               </span>
             )}
           </button>
 
-          {/* User menu or login */}
+          {/* Área do Utilizador (Logado vs Não Logado) */}
           {user ? (
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
-              >
-                <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-medium">
-                  {displayName[0].toUpperCase()}
-                </div>
-                <span className="hidden sm:block text-sm text-foreground max-w-[120px] truncate">{displayName}</span>
-                <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-52 bg-card rounded-xl shadow-lg border border-border overflow-hidden">
-                  <div className="px-4 py-3 border-b border-border">
-                    <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
-                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                  </div>
-                  <button
-                    onClick={() => { onSignOut(); setMenuOpen(false); }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-destructive hover:bg-destructive/5 transition-colors"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Sair
-                  </button>
+            <div className="flex items-center space-x-3 bg-gray-50 p-1 pr-3 rounded-full border border-gray-100">
+              
+              {/* Foto Real do Google ou Círculo com Letra Padrão */}
+              {userAvatar ? (
+                <img 
+                  src={userAvatar} 
+                  alt={userName} 
+                  className="w-8 h-8 rounded-full object-cover border border-purple-200"
+                  referrerPolicy="no-referrer" // Evita bloqueios de imagem do Google
+                />
+              ) : (
+                <div className="w-8 h-8 bg-purple-600 text-white text-xs font-bold rounded-full flex items-center justify-center uppercase">
+                  {user.email?.charAt(0)}
                 </div>
               )}
+
+              {/* Nome do Cliente */}
+              <span className="text-xs font-medium text-gray-700 max-w-[120px] truncate hidden sm:inline">
+                {userName.split(' ')[0]} {/* Mostra apenas o primeiro nome */}
+              </span>
+
+              {/* Botão de Sair (Logout) */}
+              <button 
+                onClick={onSignOut}
+                title="Sair da conta"
+                className="p-1.5 text-gray-400 hover:text-red-500 rounded-full hover:bg-white transition"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+
             </div>
           ) : (
-            <button
+            /* Botão para abrir o Modal de Login */
+            <button 
               onClick={onOpenAuth}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-full text-sm font-medium hover:bg-primary/90 transition-colors"
+              className="flex items-center space-x-1.5 text-sm text-gray-600 hover:text-purple-700 font-medium px-3 py-1.5 rounded-lg hover:bg-purple-50 transition"
             >
               <User className="w-4 h-4" />
-              Entrar
+              <span>Entrar</span>
             </button>
           )}
+
         </div>
       </div>
     </header>
